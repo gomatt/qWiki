@@ -9,7 +9,7 @@ var book = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
 </page>\
 \
 <page title='main page'>\
-<content><![CDATA[= Heading 1\n\n[[Link]]\n[[Link|Link with label]]\nPlain text\n*Bold text*\n/Italic text/\n_Underline text_]]></content>\
+<content><![CDATA[= Heading 1\n\n[[Link]]\n[[Link|Link with label]]\nPlain text\n*Bold text*\n!Strong text!\n/Italic text/\n//Emphasized text//\n_Underline text_\n-Strikethough text-\n--Deleted text--]]></content>\
 </page>\
 \
 <page title='namespace::page'>\

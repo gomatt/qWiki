@@ -139,14 +139,18 @@
 	var re = {
 		html: /([ \t]*)((?:(?:[ \t]*)?<\/?([^<\/\s>]+)[^<>]*>)+)([ \t]*\n)?/g,
 		link_internal: /\[\[([^\]\|]*)(?:\|([^\]]*))?\]\]/g,
-		italic: /(^|[\s_'"*>;([{<])\/(.+?)\//mg,
-		underline: /(^|[\s'"*>;([{<])_(.+?)_/mg,
-		bold: /(^|[\s'">;([{<])\*(.+?)\*/mg
+		italic: /(?!\/|\s\/{2})(^|[\s\-_'"*>;([{<])\/(.+?)\//mg,
+		emphasis: /(^|[\s\-_'"*>;([{<])\/{2}(.+?)\/{2}/mg,
+		underline: /(^|[\s\/\-'"*>;([{<])_(.+?)_/mg,
+		strikethrough: /(?!^\-{2}|\s\-{2})(^|[\s\/_'"*>;([{<])\-(.+?)\-/mg,
+		del: /(^|[\s'"*>;([{<])\-{2}(.+?)\-{2}/mg,
+		strong: /(^|[\s\/\-'"*>;([{<])\!(.+?)\!/mg,
+		bold: /(^|[\s\/\-'">;([{<])\*(.+?)\*/mg
 	}
 
 	// content parser
 	function parse(content) {
-		content = content.replace(/\\\n/g, "")
+		content = content//.replace(/\\\n/g, "")
 		.replace(re.html, "")
 		.replace(re.link_internal, function(str, target, label) {
 			// [[link|label]] or [[link]]
@@ -154,9 +158,13 @@
 				return render_wiki_link(target, label);
 			return str; // invalid
 		})
-		.replace(re.italic, "$1<"+"em>$2<"+"/em>")
+		.replace(re.italic, "$1<"+"i>$2<"+"/i>")
+		.replace(re.emphasis, "$1<"+"em>$2<"+"/em>")
 		.replace(re.underline, "$1<"+"span style=\"text-decoration:underline;\">$2<"+"/span>")
-		.replace(re.bold, "$1<"+"strong>$2<"+"/strong>")
+		.replace(re.strikethrough, "$1<"+"s>$2<"+"/s>")
+		.replace(re.del, "$1<"+"del>$2<"+"/del>")
+		.replace(re.bold, "$1<"+"b>$2<"+"/b>")
+		.replace(re.strong, "$1<"+"strong>$2<"+"/strong>")
 		.replace(/\n/g, "<"+"br />");
 		return content;
 	}
