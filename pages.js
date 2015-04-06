@@ -16,7 +16,7 @@ var book = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
 <content><![CDATA[Namespace: [[Main Page]]]]></content>\
 </page>\
 \
-<page title='main page::template'>\
+<page title='namespace::template'>\
 <content><![CDATA[<header><div id=\"page_title\">{{=page_title}}</div></header><div id=\"test\">Testing</div><div id=\"page_content\">{{=page_content}}</div>]]></content>\
 </page>\
 \
