@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="description" content="qWiki">
+<script src=http://code.jquery.com/jquery-2.1.3.min.js></script>
+<script src=pages.js></script>
+<script>
+//<![CDATA[
+(function(qWiki) {
+	qWiki(window.jQuery, window, document);
+} (function($, window, document) {
+	$(function() {
+		get_book();
+		$(document).ready(function() {
+			// DOM ready
+			set_page();
+		});
+	});
+
+	// configuration
+	var config = {
+		'version':'0.1a',
+		'home':'main page', // default page
+		'page_divider':'::',
+		'style_title':'css',
+		'template_title':'template'
+	};
+	
+	// script start
+	console.log('Script started: qWiki ' + config.version);
+	
+	// 'global' variables
+	var page_titles = [],
+	page_content = [],
+	xml = "",
+	$xml = {};
+
+	// remove
+	var bookshelf = {
+		xml: function() {
+			return $.parseXML(book)
+		}
+	};
+
+	// parse xml document, if available
+	function get_book() {
+		if (typeof book !== 'undefined') {
+			xml = $.parseXML(book);
+			$xml = $(xml);
+			
+			$xml.find('page').each(function() {
+				page_titles.push($(this).attr('title'));
+				page_content.push($(this).find('content').text());
+			});
+			console.log("Book available; pages found: " + page_titles.length);
+		} else {
+			console.log("Book not found!");
+		}
+	}
+
+	// page object
+	var page = {
+		title: config.home,
+		exist: function() {
+			return $xml.find('page[title="' + this.title + '"]').length;
+		},
+		type: function() {
+			return $xml.find('page[title="' + this.title + '"]').find('type').text() || "page";
+		},
+		content_raw: function() {
+			return $xml.find('page[title="' + this.title + '"]').find('content').text();
+		},
+		content: function() {
+			return parse(this.content_raw());
+		},
+		html: function() {
+			// add template html
+			var html = this.template();
+			
+			// insert simple values into template
+			//html = html.replace(/%(\w*)%/g,function(m,key){return template_values.hasOwnProperty(key)?template_values[key]:m;});
+			
+			// insert title
+			html = html.replace(/{{=page_title}}/g, this.title);
+			
+			// insert content into template
+			html = html.replace(/{{=page_content}}/g, this.content());
+			
+			// return content
+			return html;
+		},
+		namespaces: function() {
+			var namespaces = this.title.split(config.page_divider);
+			namespaces.pop();
+			return namespaces;
+		},
+		style: function() {
+			var rules = page_content_raw(config.page_divider + config.style_title);
+			//console.log('Loaded core style rules: "' + config.page_divider + config.style_title + '"');
+			var new_rules = "";
+			var namespace_titles = "";
+			$.each(this.namespaces(), function(i, namespace_title) {
+				namespace_titles += namespace_title + config.page_divider;
+				//console.log('Searching for namespace style rules: "' + namespace_titles + config.style_title + '"');
+				new_rules = page_content_raw(namespace_titles + config.style_title);
+				if (new_rules) {
+					//console.log('Appending core style rules with: "' + namespace_titles + config.style_title + '"');
+					rules += "\n" + new_rules;
+				}
+			});
+			return rules;
+		},
+		template: function() {
+			var template = page_content_raw(config.page_divider + config.template_title);
+			//console.log('Loaded core template: "' + config.page_divider + config.template_title + '"');
+			var new_template = "";
+			var namespace_titles = "";
+			$.each(this.namespaces(), function(i, namespace_title) {
+				namespace_titles += namespace_title + config.page_divider;
+				//console.log('Searching for namespace template: "' + namespace_titles + config.template_title + '"');
+				new_template = page_content_raw(namespace_titles + config.template_title);
+				if (new_template) {
+					//console.log('Override core template with: "' + namespace_titles + config.template_title + '"');
+					template = new_template;
+				}
+			});
+			return template;
+		},
+	};
+
+	// simple values for template
+	var template_values = {
+		page_title: page.title
+	};
+
+	// regex
+	var re = {
+		html: /([ \t]*)((?:(?:[ \t]*)?<\/?([^<\/\s>]+)[^<>]*>)+)([ \t]*\n)?/g,
+		link_internal: /\[\[([^\]\|]*)(?:\|([^\]]*))?\]\]/g,
+		italic: /(^|[\s_'"*>;([{<])\/(.+?)\//mg,
+		underline: /(^|[\s'"*>;([{<])_(.+?)_/mg,
+		bold: /(^|[\s'">;([{<])\*(.+?)\*/mg
+	}
+
+	// content parser
+	function parse(content) {
+		content = content.replace(/\\\n/g, "")
+		.replace(re.html, "")
+		.replace(re.link_internal, function(str, target, label) {
+			// [[link|label]] or [[link]]
+			if (target)
+				return render_wiki_link(target, label);
+			return str; // invalid
+		})
+		.replace(re.italic, "$1<"+"em>$2<"+"/em>")
+		.replace(re.underline, "$1<"+"span style=\"text-decoration:underline;\">$2<"+"/span>")
+		.replace(re.bold, "$1<"+"strong>$2<"+"/strong>")
+		.replace(/\n/g, "<"+"br />");
+		return content;
+	}
+
+	// RENDERING FUNCTIONS
+	function render_wiki_link(target, label) {
+		label = label || target;
+		return '<a href="' + target + '">' + label + '</a>';
+	}
+
+	// MISC FUNCTIONS
+	// return raw content of specific page
+	function page_content_raw(page_title) {
+		if (!page_title) return false;
+		return $xml.find('page[title="' + page_title + '"]').find('content').text();
+	}
+	// append namespace styling to head
+	function load_style() {
+		$("<style>")
+			.html(page.style())
+			.appendTo("head");
+	}
+	// append content to body
+	function load_content() {
+		$('body').append(page.html());
+	}
+
+	// MAIN FUNCTIONS
+	// set current page
+	function set_page(page_title) {
+		if (page_title)
+			page.title = page_title;
+
+		if (page.exist()) {
+			console.log('Current page: "' + page.title + '"');
+			load_style();
+			load_content();
+			document.title = page.title;
+		} else {
+			console.log('Page not found!');
+			//set_page(config.home);
+		}
+	}
+}));
+//]]>
+</script>
+</head>
+<body>
+</body>
+</html>
