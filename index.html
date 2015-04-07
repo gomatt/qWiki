@@ -66,6 +66,7 @@
 		exist: function() {
 			return $xml.find('page[title="' + this.title + '"]').length;
 		},
+		changed: false,
 		type: function() {
 			return $xml.find('page[title="' + this.title + '"]').find('type').text() || "page";
 		},
@@ -87,6 +88,9 @@
 			
 			// insert content into template
 			html = html.replace(/{{=page_content}}/g, this.content());
+			
+			// insert raw content into editor text area
+			html = html.replace(/{{=page_content_raw}}/g, this.content_raw());
 			
 			// return content
 			return html;
