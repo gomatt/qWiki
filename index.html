@@ -16,6 +16,14 @@
 		$(document).ready(function() {
 			// DOM ready
 			set_page();
+			
+			// user clicks a link
+			$(document).delegate('a', 'click', function() {
+				var target = $(this).attr("title");
+				set_page(target);
+			});
+			//$('a').on('click', function() {
+			//});
 		});
 	});
 
@@ -33,7 +41,7 @@
 	
 	// 'global' variables
 	var page_titles = [],
-	page_content = [],
+	//page_content = [],
 	xml = "",
 	$xml = {};
 
@@ -52,7 +60,7 @@
 			
 			$xml.find('page').each(function() {
 				page_titles.push($(this).attr('title'));
-				page_content.push($(this).find('content').text());
+				//page_content.push($(this).find('content').text());
 			});
 			console.log("Book available; pages found: " + page_titles.length);
 		} else {
@@ -70,27 +78,24 @@
 		type: function() {
 			return $xml.find('page[title="' + this.title + '"]').find('type').text() || "page";
 		},
-		content_raw: function() {
-			return $xml.find('page[title="' + this.title + '"]').find('content').text();
-		},
-		content: function() {
-			return parse(this.content_raw());
+		content: function(parsed) {
+			if (parsed)
+				return parse($xml.find('page[title="' + this.title + '"]').find('content').text());
+			else
+				return $xml.find('page[title="' + this.title + '"]').find('content').text();
 		},
 		html: function() {
+			var html = "";
 			// add template html
-			var html = this.template();
+			html += this.modifier(config.template_title, false);
 			
 			// insert simple values into template
 			//html = html.replace(/%(\w*)%/g,function(m,key){return template_values.hasOwnProperty(key)?template_values[key]:m;});
 			
-			// insert title
-			html = html.replace(/{{=page_title}}/g, this.title);
-			
-			// insert content into template
-			html = html.replace(/{{=page_content}}/g, this.content());
-			
-			// insert raw content into editor text area
-			html = html.replace(/{{=page_content_raw}}/g, this.content_raw());
+			// replace template values with content
+			html = html.replace(/{{=page_title}}/g, this.title) // page title
+			.replace(/{{=page_content}}/g, this.content(true)) // page content after being parsed
+			.replace(/{{=page_content_raw}}/g, this.content()); // raw content
 			
 			// return content
 			return html;
@@ -100,48 +105,28 @@
 			namespaces.pop();
 			return namespaces;
 		},
-		style: function() {
-			var rules = page_content_raw(config.page_divider + config.style_title);
-			//console.log('Loaded core style rules: "' + config.page_divider + config.style_title + '"');
-			var new_rules = "";
+		modifier: function(modifier_type, all) {
+			modifier_type = modifier_type || config.template_title;
+			var modifier = page_content(config.page_divider + modifier_type);
+			var new_modifier = "";
 			var namespace_titles = "";
 			$.each(this.namespaces(), function(i, namespace_title) {
 				namespace_titles += namespace_title + config.page_divider;
-				//console.log('Searching for namespace style rules: "' + namespace_titles + config.style_title + '"');
-				new_rules = page_content_raw(namespace_titles + config.style_title);
-				if (new_rules) {
-					//console.log('Appending core style rules with: "' + namespace_titles + config.style_title + '"');
-					rules += "\n" + new_rules;
+				new_modifier = page_content(namespace_titles + modifier_type);
+				if (new_modifier) {
+					if (all)
+						modifier += "\n" + new_modifier;
+					else
+						modifier = new_modifier;
 				}
 			});
-			return rules;
-		},
-		template: function() {
-			var template = page_content_raw(config.page_divider + config.template_title);
-			//console.log('Loaded core template: "' + config.page_divider + config.template_title + '"');
-			var new_template = "";
-			var namespace_titles = "";
-			$.each(this.namespaces(), function(i, namespace_title) {
-				namespace_titles += namespace_title + config.page_divider;
-				//console.log('Searching for namespace template: "' + namespace_titles + config.template_title + '"');
-				new_template = page_content_raw(namespace_titles + config.template_title);
-				if (new_template) {
-					//console.log('Override core template with: "' + namespace_titles + config.template_title + '"');
-					template = new_template;
-				}
-			});
-			return template;
-		},
-	};
-
-	// simple values for template
-	var template_values = {
-		page_title: page.title
+			return modifier;
+		}
 	};
 
 	// regex
 	var re = {
-		html: /([ \t]*)((?:(?:[ \t]*)?<\/?([^<\/\s>]+)[^<>]*>)+)([ \t]*\n)?/g,
+		html_remove: /<\/?([^<\/\s>]+)[^<>\n]*>/g,
 		link_internal: /\[\[([^\]\|]*)(?:\|([^\]]*))?\]\]/g,
 		italic: /(?!\/|\s\/{2})(^|[\s\-_'"*>;([{<])\/(.+?)\//mg,
 		emphasis: /(^|[\s\-_'"*>;([{<])\/{2}(.+?)\/{2}/mg,
@@ -155,7 +140,7 @@
 	// content parser
 	function parse(content) {
 		content = content//.replace(/\\\n/g, "")
-		.replace(re.html, "")
+		.replace(re.html_remove, "")
 		.replace(re.link_internal, function(str, target, label) {
 			// [[link|label]] or [[link]]
 			if (target)
@@ -169,38 +154,49 @@
 		.replace(re.del, "$1<"+"del>$2<"+"/del>")
 		.replace(re.bold, "$1<"+"b>$2<"+"/b>")
 		.replace(re.strong, "$1<"+"strong>$2<"+"/strong>")
-		.replace(/\n/g, "<"+"br />");
+		.replace(/\n/g, "<"+"br>");
 		return content;
 	}
 
 	// RENDERING FUNCTIONS
 	function render_wiki_link(target, label) {
 		label = label || target;
-		return '<a href="' + target + '">' + label + '</a>';
+		var $link = $('<a>', {
+			title: target,
+			text: label
+		});
+		if (!page_content(target)) $link.addClass('broken');
+		return $link.get(0).outerHTML;
 	}
 
 	// MISC FUNCTIONS
 	// return raw content of specific page
-	function page_content_raw(page_title) {
-		if (!page_title) return false;
+	function page_content(page_title) {
 		return $xml.find('page[title="' + page_title + '"]').find('content').text();
 	}
 	// append namespace styling to head
 	function load_style() {
-		$("<style>")
-			.html(page.style())
-			.appendTo("head");
+		// remove past styles
+		$('style').remove();
+		
+		// load page styles
+		var style = $('<style>', {
+			html: page.modifier(config.style_title, true)
+		});
+		return style.appendTo('head');
 	}
 	// append content to body
 	function load_content() {
-		$('body').append(page.html());
+		$('body').html(page.html());
 	}
 
 	// MAIN FUNCTIONS
 	// set current page
 	function set_page(page_title) {
-		if (page_title)
+		if (page_title) {
+			console.log('Searching for: "' + page_title + '"');
 			page.title = page_title;
+		}
 
 		if (page.exist()) {
 			console.log('Current page: "' + page.title + '"');
