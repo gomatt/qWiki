@@ -22,8 +22,6 @@
 				var target = $(this).attr("title");
 				set_page(target);
 			});
-			//$('a').on('click', function() {
-			//});
 		});
 	});
 
@@ -176,7 +174,7 @@
 	}
 	// append namespace styling to head
 	function load_style() {
-		// remove past styles
+		// clear styles
 		$('style').remove();
 		
 		// load page styles
@@ -193,19 +191,16 @@
 	// MAIN FUNCTIONS
 	// set current page
 	function set_page(page_title) {
-		if (page_title) {
-			console.log('Searching for: "' + page_title + '"');
+		if (page_title)
 			page.title = page_title;
-		}
 
 		if (page.exist()) {
-			console.log('Current page: "' + page.title + '"');
+			console.log('Set page: "' + page.title + '"');
 			load_style();
 			load_content();
 			document.title = page.title;
 		} else {
 			console.log('Page not found!');
-			//set_page(config.home);
 		}
 	}
 }));
