@@ -14,8 +14,13 @@
 	$(function() {
 		get_book();
 		$(document).ready(function() {
+			var page = "";
+			
 			// DOM ready
-			set_page();
+			if (getUrlVars()["p"])
+				page = getUrlVars()["p"].toLowerCase();
+			
+			set_page(page);
 			
 			// user clicks a link
 			$(document).delegate('a', 'click', function() {
@@ -29,8 +34,9 @@
 	var config = {
 		'version':'0.1a',
 		'home':'main page', // default page
-		'page_divider':'::',
-		'style_title':'css',
+		'page_divider':':',
+		'core_title':'core',
+		'style_title':'style',
 		'template_title':'template'
 	};
 	
@@ -74,13 +80,20 @@
 		},
 		changed: false,
 		type: function() {
-			return $xml.find('page[title="' + this.title + '"]').find('type').text() || "page";
+			return $xml.find('page[title="' + this.title + '"]').find('type').text() || 'page';
 		},
-		content: function(parsed) {
-			if (parsed)
-				return parse($xml.find('page[title="' + this.title + '"]').find('content').text());
-			else
-				return $xml.find('page[title="' + this.title + '"]').find('content').text();
+		tags: function () {
+			
+		},
+		content: function(type) {
+			switch (type) {
+				case 'page':
+					return content = parse($xml.find('page[title="' + this.title + '"]').find('content').text());
+				case 'nowiki':
+					return $xml.find('page[title="' + this.title + '"]').find('content').text();
+				default:
+					return $xml.find('page[title="' + this.title + '"]').find('content').text();
+			}
 		},
 		html: function() {
 			var html = "";
@@ -92,23 +105,36 @@
 			
 			// replace template values with content
 			html = html.replace(/{{=page_title}}/g, this.title) // page title
-			.replace(/{{=page_content}}/g, this.content(true)) // page content after being parsed
+			.replace(/{{=page_content}}/g, this.content(this.type())) // page content after being parsed
 			.replace(/{{=page_content_raw}}/g, this.content()); // raw content
 			
 			// return content
 			return html;
 		},
 		namespaces: function() {
+			// get all namespaces for this page
 			var namespaces = this.title.split(config.page_divider);
 			namespaces.pop();
 			return namespaces;
 		},
 		modifier: function(modifier_type, all) {
-			modifier_type = modifier_type || config.template_title;
-			var modifier = page_content(config.page_divider + modifier_type);
-			var new_modifier = "";
-			var namespace_titles = "";
-			$.each(this.namespaces(), function(i, namespace_title) {
+			if (typeof modifier_type == 'undefined')
+				return false;
+				
+			var new_modifier = "",
+			namespace_titles = "",
+			modifier = "",
+			namespaces = this.namespaces();
+			
+			// load core modifier once
+			if (namespaces[0] == config.core_title) namespaces.shift();
+			modifier = page_content(config.core_title + config.page_divider + modifier_type);
+			
+			// load default modifier
+			modifier += page_content(config.page_divider + modifier_type);
+			
+			// load each namespace modifier, if available
+			$.each(namespaces, function(i, namespace_title) {
 				namespace_titles += namespace_title + config.page_divider;
 				new_modifier = page_content(namespace_titles + modifier_type);
 				if (new_modifier) {
@@ -130,7 +156,7 @@
 		emphasis: /(^|[\s\-_'"*>;([{<])\/{2}(.+?)\/{2}/mg,
 		underline: /(^|[\s\/\-'"*>;([{<])_(.+?)_/mg,
 		strikethrough: /(?!^\-{2}|\s\-{2})(^|[\s\/_'"*>;([{<])\-(.+?)\-/mg,
-		del: /(^|[\s'"*>;([{<])\-{2}(.+?)\-{2}/mg,
+		del: /(^|[\s\/'"*>;([{<])\-{2}(.+?)\-{2}/mg,
 		strong: /(^|[\s\/\-'"*>;([{<])\!(.+?)\!/mg,
 		bold: /(^|[\s\/\-'">;([{<])\*(.+?)\*/mg
 	}
@@ -139,12 +165,6 @@
 	function parse(content) {
 		content = content//.replace(/\\\n/g, "")
 		.replace(re.html_remove, "")
-		.replace(re.link_internal, function(str, target, label) {
-			// [[link|label]] or [[link]]
-			if (target)
-				return render_wiki_link(target, label);
-			return str; // invalid
-		})
 		.replace(re.italic, "$1<"+"i>$2<"+"/i>")
 		.replace(re.emphasis, "$1<"+"em>$2<"+"/em>")
 		.replace(re.underline, "$1<"+"span style=\"text-decoration:underline;\">$2<"+"/span>")
@@ -152,18 +172,28 @@
 		.replace(re.del, "$1<"+"del>$2<"+"/del>")
 		.replace(re.bold, "$1<"+"b>$2<"+"/b>")
 		.replace(re.strong, "$1<"+"strong>$2<"+"/strong>")
-		.replace(/\n/g, "<"+"br>");
+		.replace(/\n/g, "<"+"br>")
+		.replace(re.link_internal, function(str, target, label) {
+			// [[link|label]] or [[link]]
+			if (target)
+				return render_wiki_link(target, label);
+			return str; // invalid
+		});
 		return content;
 	}
 
 	// RENDERING FUNCTIONS
 	function render_wiki_link(target, label) {
 		label = label || target;
+		// create link
 		var $link = $('<a>', {
 			title: target,
 			text: label
 		});
+		
+		// add link classes, if required
 		if (!page_content(target)) $link.addClass('broken');
+		
 		return $link.get(0).outerHTML;
 	}
 
@@ -188,6 +218,20 @@
 		$('body').html(page.html());
 	}
 
+	// Read a page's GET URL variables and return them as an associative array.
+	function getUrlVars()
+	{
+			var vars = [], hash;
+			var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
+			for(var i = 0; i < hashes.length; i++)
+			{
+					hash = hashes[i].split('=');
+					vars.push(hash[0]);
+					vars[hash[0]] = hash[1];
+			}
+			return vars;
+	}
+
 	// MAIN FUNCTIONS
 	// set current page
 	function set_page(page_title) {
@@ -195,12 +239,16 @@
 			page.title = page_title;
 
 		if (page.exist()) {
+			var execStart = new Date().getTime();
 			console.log('Set page: "' + page.title + '"');
 			load_style();
 			load_content();
 			document.title = page.title;
+			var execTime = new Date().getTime() - execStart;
+			console.log("Execution time: " + execTime + " ms");
 		} else {
 			console.log('Page not found!');
+			set_page(config.home);
 		}
 	}
 }));
