@@ -12,20 +12,15 @@
 	qWiki(window.jQuery, window, document);
 } (function($, window, document) {
 	$(function() {
-		get_book();
+		get_Book();
 		$(document).ready(function() {
-			var page = "";
-			
 			// DOM ready
-			if (getUrlVars()["p"])
-				page = getUrlVars()["p"].toLowerCase();
-			
-			set_page(page);
+			set_Page(fix_QueryString(get_QueryString()["p"]));
 			
 			// user clicks a link
 			$(document).delegate('a', 'click', function() {
 				var target = $(this).attr("title");
-				set_page(target);
+				set_Page(target);
 			});
 		});
 	});
@@ -35,6 +30,7 @@
 		'version':'0.1a',
 		'home':'main page', // default page
 		'page_divider':':',
+		'action_divider':'::',
 		'core_title':'core',
 		'style_title':'style',
 		'template_title':'template'
@@ -57,7 +53,7 @@
 	};
 
 	// parse xml document, if available
-	function get_book() {
+	function get_Book() {
 		if (typeof book !== 'undefined') {
 			xml = $.parseXML(book);
 			$xml = $(xml);
@@ -112,9 +108,18 @@
 			return html;
 		},
 		namespaces: function() {
-			// get all namespaces for this page
-			var namespaces = this.title.split(config.page_divider);
+			var namespaces = this.title;
+			var re_action = new RegExp(config.action_divider + '(.+)?','g');
+			
+			// remove actions, if any
+			namespaces = namespaces.replace(re_action, "");
+			
+			// split namespaces
+			namespaces = namespaces.split(config.page_divider);
+			
+			// remove pagename
 			namespaces.pop();
+			
 			return namespaces;
 		},
 		modifier: function(modifier_type, all) {
@@ -128,15 +133,15 @@
 			
 			// load core modifier once
 			if (namespaces[0] == config.core_title) namespaces.shift();
-			modifier = page_content(config.core_title + config.page_divider + modifier_type);
+			modifier = page_Content(config.core_title + config.page_divider + modifier_type);
 			
 			// load default modifier
-			modifier += page_content(config.page_divider + modifier_type);
+			modifier += page_Content(config.page_divider + modifier_type);
 			
 			// load each namespace modifier, if available
 			$.each(namespaces, function(i, namespace_title) {
 				namespace_titles += namespace_title + config.page_divider;
-				new_modifier = page_content(namespace_titles + modifier_type);
+				new_modifier = page_Content(namespace_titles + modifier_type);
 				if (new_modifier) {
 					if (all)
 						modifier += "\n" + new_modifier;
@@ -155,35 +160,36 @@
 		italic: /(?!\/|\s\/{2})(^|[\s\-_'"*>;([{<])\/(.+?)\//mg,
 		emphasis: /(^|[\s\-_'"*>;([{<])\/{2}(.+?)\/{2}/mg,
 		underline: /(^|[\s\/\-'"*>;([{<])_(.+?)_/mg,
-		strikethrough: /(?!^\-{2}|\s\-{2})(^|[\s\/_'"*>;([{<])\-(.+?)\-/mg,
+		strike_through: /(?!^\-{2}|\s\-{2})(^|[\s\/_'"*>;([{<])\-(.+?)\-/mg,
 		del: /(^|[\s\/'"*>;([{<])\-{2}(.+?)\-{2}/mg,
 		strong: /(^|[\s\/\-'"*>;([{<])\!(.+?)\!/mg,
-		bold: /(^|[\s\/\-'">;([{<])\*(.+?)\*/mg
+		bold: /(^|[\s\/\-'">;([{<])\*(.+?)\*/mg,
+		new_line: /\n/g
 	}
 
 	// content parser
 	function parse(content) {
 		content = content//.replace(/\\\n/g, "")
-		.replace(re.html_remove, "")
-		.replace(re.italic, "$1<"+"i>$2<"+"/i>")
-		.replace(re.emphasis, "$1<"+"em>$2<"+"/em>")
-		.replace(re.underline, "$1<"+"span style=\"text-decoration:underline;\">$2<"+"/span>")
-		.replace(re.strikethrough, "$1<"+"s>$2<"+"/s>")
-		.replace(re.del, "$1<"+"del>$2<"+"/del>")
-		.replace(re.bold, "$1<"+"b>$2<"+"/b>")
-		.replace(re.strong, "$1<"+"strong>$2<"+"/strong>")
-		.replace(/\n/g, "<"+"br>")
-		.replace(re.link_internal, function(str, target, label) {
-			// [[link|label]] or [[link]]
-			if (target)
-				return render_wiki_link(target, label);
-			return str; // invalid
-		});
+			.replace(re.html_remove, "")
+			.replace(re.italic, "$1<"+"i>$2<"+"/i>")
+			.replace(re.emphasis, "$1<"+"em>$2<"+"/em>")
+			.replace(re.underline, "$1<"+"span style=\"text-decoration:underline;\">$2<"+"/span>")
+			.replace(re.strike_through, "$1<"+"s>$2<"+"/s>")
+			.replace(re.del, "$1<"+"del>$2<"+"/del>")
+			.replace(re.bold, "$1<"+"b>$2<"+"/b>")
+			.replace(re.strong, "$1<"+"strong>$2<"+"/strong>")
+			.replace(re.new_line, "<"+"br>")
+			.replace(re.link_internal, function(str, target, label) {
+				// [[link|label]] or [[link]]
+				if (target)
+					return render_WikiLink(target, label);
+				return str; // invalid
+			});
 		return content;
 	}
 
 	// RENDERING FUNCTIONS
-	function render_wiki_link(target, label) {
+	function render_WikiLink(target, label) {
 		label = label || target;
 		// create link
 		var $link = $('<a>', {
@@ -192,18 +198,18 @@
 		});
 		
 		// add link classes, if required
-		if (!page_content(target)) $link.addClass('broken');
+		if (!page_Content(target)) $link.addClass('broken');
 		
 		return $link.get(0).outerHTML;
 	}
 
 	// MISC FUNCTIONS
 	// return raw content of specific page
-	function page_content(page_title) {
-		return $xml.find('page[title="' + page_title + '"]').find('content').text();
+	function page_Content(page_Title) {
+		return $xml.find('page[title="' + page_Title + '"]').find('content').text();
 	}
 	// append namespace styling to head
-	function load_style() {
+	function load_Style() {
 		// clear styles
 		$('style').remove();
 		
@@ -214,12 +220,12 @@
 		return style.appendTo('head');
 	}
 	// append content to body
-	function load_content() {
+	function load_Content() {
 		$('body').html(page.html());
 	}
 
 	// Read a page's GET URL variables and return them as an associative array.
-	function getUrlVars()
+	function get_QueryString()
 	{
 			var vars = [], hash;
 			var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
@@ -231,24 +237,39 @@
 			}
 			return vars;
 	}
+	
+	function fix_QueryString(str) {
+		if (typeof str === 'undefined')
+			return false;
+
+		var re_action = new RegExp(config.action_divider + '(.+)?','g');
+		str = decodeURI(str);
+		
+		str = str
+			.trim()
+			.toLowerCase()
+			.replace(re_action, "")
+			.replace(/\+/g, " ");
+
+		return str;
+	}
 
 	// MAIN FUNCTIONS
 	// set current page
-	function set_page(page_title) {
-		if (page_title)
-			page.title = page_title;
+	function set_Page(page_Title) {
+		page.title = page_Title || config.home;
 
 		if (page.exist()) {
 			var execStart = new Date().getTime();
 			console.log('Set page: "' + page.title + '"');
-			load_style();
-			load_content();
+			load_Style();
+			load_Content();
 			document.title = page.title;
 			var execTime = new Date().getTime() - execStart;
 			console.log("Execution time: " + execTime + " ms");
 		} else {
 			console.log('Page not found!');
-			set_page(config.home);
+			set_Page(config.home);
 		}
 	}
 }));
