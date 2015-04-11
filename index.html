@@ -15,7 +15,7 @@
 		get_Book();
 		$(document).ready(function() {
 			// DOM ready
-			set_Page(fix_QueryString(get_QueryString()["p"]));
+			set_Page(fix_PageQueryString(get_QueryString()["p"]));
 			
 			// user clicks a link
 			$(document).delegate('a', 'click', function() {
@@ -40,9 +40,7 @@
 	console.log('Script started: qWiki ' + config.version);
 	
 	// 'global' variables
-	var page_titles = [],
-	//page_content = [],
-	xml = "",
+	var xml = "",
 	$xml = {};
 
 	// remove
@@ -55,6 +53,7 @@
 	// parse xml document, if available
 	function get_Book() {
 		if (typeof book !== 'undefined') {
+			var page_titles = [];
 			xml = $.parseXML(book);
 			$xml = $(xml);
 			
@@ -78,9 +77,7 @@
 		type: function() {
 			return $xml.find('page[title="' + this.title + '"]').find('type').text() || 'page';
 		},
-		tags: function () {
-			
-		},
+		tags: function() {},
 		content: function(type) {
 			switch (type) {
 				case 'page':
@@ -165,7 +162,8 @@
 		strong: /(^|[\s\/\-'"*>;([{<])\!(.+?)\!/mg,
 		bold: /(^|[\s\/\-'">;([{<])\*(.+?)\*/mg,
 		new_line: /\n/g
-	}
+	};
+	re.action_remove = new RegExp(config.action_divider + '(.+)?','g');
 
 	// content parser
 	function parse(content) {
@@ -238,17 +236,16 @@
 			return vars;
 	}
 	
-	function fix_QueryString(str) {
+	function fix_PageQueryString(str) {
 		if (typeof str === 'undefined')
 			return false;
 
-		var re_action = new RegExp(config.action_divider + '(.+)?','g');
 		str = decodeURI(str);
 		
 		str = str
 			.trim()
 			.toLowerCase()
-			.replace(re_action, "")
+			.replace(re.action_remove, "")
 			.replace(/\+/g, " ");
 
 		return str;
@@ -257,7 +254,9 @@
 	// MAIN FUNCTIONS
 	// set current page
 	function set_Page(page_Title) {
-		page.title = page_Title || config.home;
+		page_Title = page_Title || config.home;
+		page_Title = page_Title.replace(re.action, "");
+		page.title = page_Title;
 
 		if (page.exist()) {
 			var execStart = new Date().getTime();
