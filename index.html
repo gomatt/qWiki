@@ -12,15 +12,16 @@
 	qWiki(window.jQuery, window, document);
 } (function($, window, document) {
 	$(function() {
-		get_Book();
+		book.open(allPages);
+	
 		$(document).ready(function() {
 			// DOM ready
-			set_Page(fix_PageQueryString(get_QueryString()["p"]));
+			onLoad();
 			
 			// user clicks a link
 			$(document).delegate('a', 'click', function() {
 				var target = $(this).attr("title");
-				set_Page(target);
+				setPage(target);
 			});
 		});
 	});
@@ -34,120 +35,151 @@
 		'core_title':'core',
 		'style_title':'style',
 		'template_title':'template'
-	};
-	
-	// script start
+	}, pageCache = [];
 	console.log('Script started: qWiki ' + config.version);
 	
-	// 'global' variables
-	var xml = "",
-	$xml = {};
-
-	// remove
-	var bookshelf = {
-		xml: function() {
-			return $.parseXML(book)
+	var book = {
+		xml: {},
+		open: function(data) {
+			//console.log('Type of data being checked: "' + typeof data + '"');
+			if (typeof data == 'string') {
+				var xml = $.parseXML(data);
+				var $xml = $(xml);
+				var i = 0;
+				
+				$xml.find('page').each(function() {
+					i++;
+				});
+				
+				if (i) {
+					console.log('Book is valid; pages found: ' + i);
+					this.xml = $xml;
+				}
+				
+				return false;
+			} else {
+				console.log('Book data not valid!');
+				return false;
+			}
+		},
+		pages: function() {
+			var pageTitles = [];
+			this.xml.find('page').each(function() {
+				pageTitles.push($(this).attr('title'));
+			});
+			return pageTitles;
+		},
+		pageCount: function() {
+			return this.pages().length;
+		},
+		pageContent: function(pageTitle) {
+			return this.xml.find('page[title="' + pageTitle + '"]').find('content').text();
+		},
+		pageType: function(pageTitle) {
+			return this.xml.find('page[title="' + pageTitle + '"]').find('type').text() || 'page';
+		},
+		pageExist: function(pageTitle) {
+			return this.xml.find('page[title="' + pageTitle + '"]').length > 0;
+		},
+		cachePage: function(pageTitle) {
+			//console.log('Caching: "' + pageTitle + '"');
+			pageCache[pageTitle] = new page(pageTitle, this.pageContent(pageTitle), this.pageType(pageTitle));
+			console.log(pageCache);
+			return true;
+		},
+		viewPage: function(pageTitle) {
+			if (!(pageTitle in pageCache)) {
+				this.cachePage(pageTitle);
+			}
+			load_Style(pageCache[pageTitle]);
+			load_Content(pageCache[pageTitle]);
+			document.title = pageTitle;
+			return true;
+		},
+		getPageContent: function(pageTitle) {
+			if (!(pageTitle in pageCache)) {
+				this.cachePage(pageTitle);
+			}
+			return pageCache[pageTitle].content;
 		}
 	};
 
-	// parse xml document, if available
-	function get_Book() {
-		if (typeof book !== 'undefined') {
-			var page_titles = [];
-			xml = $.parseXML(book);
-			$xml = $(xml);
-			
-			$xml.find('page').each(function() {
-				page_titles.push($(this).attr('title'));
-				//page_content.push($(this).find('content').text());
-			});
-			console.log("Book available; pages found: " + page_titles.length);
-		} else {
-			console.log("Book not found!");
-		}
+	function page(title, content, type) {
+		this.title = title;
+		this.content = content;
+		this.type = type || 'page';
+		this.changed = false;
+		return this.title;
 	}
-
-	// page object
-	var page = {
-		title: config.home,
-		exist: function() {
-			return $xml.find('page[title="' + this.title + '"]').length;
-		},
-		changed: false,
-		type: function() {
-			return $xml.find('page[title="' + this.title + '"]').find('type').text() || 'page';
-		},
-		tags: function() {},
-		content: function(type) {
-			switch (type) {
-				case 'page':
-					return content = parse($xml.find('page[title="' + this.title + '"]').find('content').text());
-				case 'nowiki':
-					return $xml.find('page[title="' + this.title + '"]').find('content').text();
-				default:
-					return $xml.find('page[title="' + this.title + '"]').find('content').text();
-			}
-		},
-		html: function() {
-			var html = "";
-			// add template html
-			html += this.modifier(config.template_title, false);
-			
-			// insert simple values into template
-			//html = html.replace(/%(\w*)%/g,function(m,key){return template_values.hasOwnProperty(key)?template_values[key]:m;});
-			
-			// replace template values with content
-			html = html.replace(/{{=page_title}}/g, this.title) // page title
-			.replace(/{{=page_content}}/g, this.content(this.type())) // page content after being parsed
-			.replace(/{{=page_content_raw}}/g, this.content()); // raw content
-			
-			// return content
-			return html;
-		},
-		namespaces: function() {
-			var namespaces = this.title;
-			var re_action = new RegExp(config.action_divider + '(.+)?','g');
-			
-			// remove actions, if any
-			namespaces = namespaces.replace(re_action, "");
-			
-			// split namespaces
-			namespaces = namespaces.split(config.page_divider);
-			
-			// remove pagename
-			namespaces.pop();
-			
-			return namespaces;
-		},
-		modifier: function(modifier_type, all) {
-			if (typeof modifier_type == 'undefined')
-				return false;
-				
-			var new_modifier = "",
-			namespace_titles = "",
-			modifier = "",
-			namespaces = this.namespaces();
-			
-			// load core modifier once
-			if (namespaces[0] == config.core_title) namespaces.shift();
-			modifier = page_Content(config.core_title + config.page_divider + modifier_type);
-			
-			// load default modifier
-			modifier += page_Content(config.page_divider + modifier_type);
-			
-			// load each namespace modifier, if available
-			$.each(namespaces, function(i, namespace_title) {
-				namespace_titles += namespace_title + config.page_divider;
-				new_modifier = page_Content(namespace_titles + modifier_type);
-				if (new_modifier) {
-					if (all)
-						modifier += "\n" + new_modifier;
-					else
-						modifier = new_modifier;
-				}
-			});
-			return modifier;
+	page.prototype.cont = function(type) {
+		switch (type) {
+			case 'page':
+				return parse(this.content);
+			case 'nowiki':
+				return this.content;
+			default:
+				return this.content;
 		}
+	};
+	page.prototype.html = function() {
+		var html = "";
+		// add template html
+		html += this.modifier(config.template_title, false);
+		
+		// insert simple values into template
+		//html = html.replace(/%(\w*)%/g,function(m,key){return template_values.hasOwnProperty(key)?template_values[key]:m;});
+		
+		// replace template values with content
+		html = html.replace(/{{=page_title}}/g, this.title) // page title
+		.replace(/{{=page_content}}/g, this.cont(this.type)) // page content after being parsed
+		.replace(/{{=page_content_raw}}/g, this.content); // raw content
+		
+		// return content
+		return html;
+	};
+	page.prototype.namespaces = function() {
+		var namespaces = this.title;
+		var re_action = new RegExp(config.action_divider + '(.+)?','g');
+		
+		// remove actions, if any
+		namespaces = namespaces.replace(re_action, "");
+		
+		// split namespaces
+		namespaces = namespaces.split(config.page_divider);
+		
+		// remove pagename
+		namespaces.pop();
+		
+		return namespaces;
+	};
+	page.prototype.modifier = function(modifier_type, all) {
+		if (typeof modifier_type == 'undefined')
+			return false;
+			
+		var new_modifier = "",
+		namespace_titles = "",
+		modifier = "",
+		namespaces = this.namespaces();
+		
+		// load core modifier once
+		if (namespaces[0] == config.core_title) namespaces.shift();
+		modifier = book.getPageContent(config.core_title + config.page_divider + modifier_type);
+		
+		// load default modifier
+		modifier += book.getPageContent(config.page_divider + modifier_type);
+		
+		// load each namespace modifier, if available
+		$.each(namespaces, function(i, namespace_title) {
+			namespace_titles += namespace_title + config.page_divider;
+			new_modifier = book.getPageContent(namespace_titles + modifier_type);
+			if (new_modifier) {
+				if (all)
+					modifier += "\n" + new_modifier;
+				else
+					modifier = new_modifier;
+			}
+		});
+		return modifier;
 	};
 
 	// regex
@@ -180,96 +212,100 @@
 			.replace(re.link_internal, function(str, target, label) {
 				// [[link|label]] or [[link]]
 				if (target)
-					return render_WikiLink(target, label);
+					return render.wikiLink(target, label);
 				return str; // invalid
 			});
 		return content;
 	}
+	
+	var render = {
+		wikiLink: function(target, label) {
+			label = label || target;
+			
+			// create link
+			var $link = $('<a>', {
+				title: target,
+				text: label
+			});
+			
+			// add link classes, if required
+			if (!book.pageContent(target)) $link.addClass('broken');
+			
+			// return link html
+			return $link.get(0).outerHTML;
+		}
+	};
 
-	// RENDERING FUNCTIONS
-	function render_WikiLink(target, label) {
-		label = label || target;
-		// create link
-		var $link = $('<a>', {
-			title: target,
-			text: label
-		});
-		
-		// add link classes, if required
-		if (!page_Content(target)) $link.addClass('broken');
-		
-		return $link.get(0).outerHTML;
-	}
-
-	// MISC FUNCTIONS
-	// return raw content of specific page
-	function page_Content(page_Title) {
-		return $xml.find('page[title="' + page_Title + '"]').find('content').text();
-	}
 	// append namespace styling to head
-	function load_Style() {
+	function load_Style(selectedPage) {
 		// clear styles
 		$('style').remove();
 		
 		// load page styles
 		var style = $('<style>', {
-			html: page.modifier(config.style_title, true)
+			html: selectedPage.modifier(config.style_title, true)
 		});
 		return style.appendTo('head');
 	}
 	// append content to body
-	function load_Content() {
-		$('body').html(page.html());
-	}
-
-	// Read a page's GET URL variables and return them as an associative array.
-	function get_QueryString()
-	{
-			var vars = [], hash;
-			var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
-			for(var i = 0; i < hashes.length; i++)
-			{
-					hash = hashes[i].split('=');
-					vars.push(hash[0]);
-					vars[hash[0]] = hash[1];
-			}
-			return vars;
+	function load_Content(selectedPage) {
+		$('body').html(selectedPage.html());
 	}
 	
-	function fix_PageQueryString(str) {
-		if (typeof str === 'undefined')
-			return false;
-
-		str = decodeURI(str);
+	function queryString(field) {
+		str = window.location.search.slice(1);
+		if (field) {
+			var qs = [], pair;
+			var pairs = str.split('&');
+			for(var i = 0; i < pairs.length; i++)
+			{
+					pair = pairs[i].split('=');
+					qs.push(pair[0]);
+					qs[pair[0]] = pair[1];
+			}
+			return qs[field];
+		}
+		return str;
+	}
+	
+	function requestedPage() {
+		pageTitle = queryString("p") || queryString();
+		//pageAction = window.location.hash.slice(1);
 		
-		str = str
+		if (!pageTitle) return false;
+		
+		pageTitle = decodeURI(pageTitle);
+		
+		pageTitle = pageTitle
 			.trim()
 			.toLowerCase()
 			.replace(re.action_remove, "")
 			.replace(/\+/g, " ");
 
-		return str;
+		return pageTitle;
 	}
-
+	
 	// MAIN FUNCTIONS
-	// set current page
-	function set_Page(page_Title) {
-		page_Title = page_Title || config.home;
-		page_Title = page_Title.replace(re.action, "");
-		page.title = page_Title;
+	function setPage(pageTitle) {
+		pageTitle = pageTitle || config.home;
+		pageTitle = pageTitle.replace(re.action, "");
 
-		if (page.exist()) {
+		if (book.pageExist(pageTitle)) {
+			//page.title = pageTitle;
 			var execStart = new Date().getTime();
-			console.log('Set page: "' + page.title + '"');
-			load_Style();
-			load_Content();
-			document.title = page.title;
+			book.viewPage(pageTitle);
 			var execTime = new Date().getTime() - execStart;
 			console.log("Execution time: " + execTime + " ms");
 		} else {
 			console.log('Page not found!');
-			set_Page(config.home);
 		}
+	}
+	
+	function onLoad() {
+		if (requestedPage() && book.pageExist(requestedPage()))
+			setPage(requestedPage());
+		else
+			setPage(config.home);
 	}
 }));
 //]]>

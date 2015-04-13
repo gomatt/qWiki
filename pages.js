@@ -1,4 +1,4 @@
-var book = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+var allPages = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
 <book>\
 <page title='core:template'>\
 <type>nowiki</type>\
