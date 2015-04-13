@@ -82,10 +82,13 @@
 			return this.xml.find('page[title="' + pageTitle + '"]').length > 0;
 		},
 		cachePage: function(pageTitle) {
-			//console.log('Caching: "' + pageTitle + '"');
-			pageCache[pageTitle] = new page(pageTitle, this.pageContent(pageTitle), this.pageType(pageTitle));
-			console.log(pageCache);
-			return true;
+			if (!(pageTitle in pageCache)) {
+				//console.log('Caching: "' + pageTitle + '"');
+				pageCache[pageTitle] = new page(pageTitle, this.pageContent(pageTitle), this.pageType(pageTitle));
+				console.log(pageCache);
+				return true;
+			}
+			return false;
 		},
 		viewPage: function(pageTitle) {
 			if (!(pageTitle in pageCache)) {
@@ -302,6 +305,11 @@
 	}
 	
 	function onLoad() {
+		// cache core pages
+		book.cachePage('core:style');
+		book.cachePage('core:template');
+		
+		// set requested page
 		if (requestedPage() && book.pageExist(requestedPage()))
 			setPage(requestedPage());
 		else
